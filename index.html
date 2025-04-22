@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gestão de Funcionários e Tickets</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container py-4">
+  <h2 class="mb-3">Cadastro de Funcionários</h2>
+  <form id="formFuncionario" class="mb-4">
+    <input type="hidden" id="funcId" />
+    <div class="mb-2">
+      <label class="form-label">Nome:</label>
+      <input type="text" class="form-control" id="funcNome" required />
+    </div>
+    <div class="mb-2">
+      <label class="form-label">CPF:</label>
+      <input type="text" class="form-control" id="funcCPF" required />
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Situação:</label>
+      <select class="form-select" id="funcSituacao">
+        <option value="A">Ativo</option>
+        <option value="I">Inativo</option>
+      </select>
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Última Modificação:</label>
+      <input type="text" class="form-control" id="funcDataMod" disabled />
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar Funcionário</button>
+  </form>
+
+  <table class="table table-bordered">
+    <thead><tr><th>Nome</th><th>CPF</th><th>Situação</th><th>Editar</th></tr></thead>
+    <tbody id="tabelaFuncionarios"></tbody>
+  </table>
+
+  <h2 class="mb-3">Cadastro de Tickets</h2>
+  <form id="formTicket" class="mb-4">
+    <input type="hidden" id="ticketId" />
+    <div class="mb-2">
+      <label class="form-label">Funcionário:</label>
+      <select class="form-select" id="ticketFuncionario"></select>
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Quantidade:</label>
+      <input type="number" class="form-control" id="ticketQtd" required />
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Última Modificação:</label>
+      <input type="text" class="form-control" id="ticketDataMod" disabled />
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar Ticket</button>
+  </form>
+
+  <h2 class="mb-3">Relatório de Tickets</h2>
+  <form class="mb-3">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Funcionário:</label>
+        <select class="form-select" id="relFuncionario"><option value="">Todos</option></select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Situação:</label>
+        <select class="form-select" id="relSituacao">
+          <option value="">Todos</option>
+          <option value="A">Ativo</option>
+          <option value="I">Inativo</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">De:</label>
+        <input type="date" class="form-control" id="relInicio" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Até:</label>
+        <input type="date" class="form-control" id="relFim" />
+      </div>
+    </div>
+    <button type="button" class="btn btn-success mt-3" onclick="gerarRelatorio()">Gerar</button>
+    <button type="button" class="btn btn-secondary mt-3 ms-2" onclick="exportarCSV()">Exportar CSV</button>
+  </form>
+  <table class="table table-bordered">
+    <thead><tr><th>Funcionário</th><th>Quantidade</th><th>Data</th></tr></thead>
+    <tbody id="relTabela"></tbody>
+  </table>
+
+  <script>
+    let funcionarios = JSON.parse(localStorage.getItem('funcionarios') || '[]');
+    let tickets = JSON.parse(localStorage.getItem('tickets') || '[]');
+
+    document.getElementById('formFuncionario').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const nome = funcNome.value.trim();
+      const cpf = funcCPF.value.trim();
+      const situacao = funcSituacao.value;
+      const id = funcId.value || crypto.randomUUID();
+      const dataMod = new Date().toISOString();
+
+      if (!nome || !cpf) return alert('Nome e CPF obrigatórios');
+      if (funcionarios.some(f => f.cpf === cpf && f.id !== id)) return alert('CPF já cadastrado');
+
+      const existente = funcionarios.find(f => f.id === id);
+      if (existente) {
+        Object.assign(existente, { nome, cpf, situacao, dataMod });
+      } else {
+        funcionarios.push({ id, nome, cpf, situacao: 'A', dataMod });
+      }
+
+      salvarLocal();
+      limparFuncionarioForm();
+      atualizarSelects();
+      atualizarTabelaFuncionarios();
+    });
+
+    function editarFuncionario(id) {
+      const f = funcionarios.find(f => f.id === id);
+      if (!f) return;
+      funcId.value = f.id;
+      funcNome.value = f.nome;
+      funcCPF.value = f.cpf;
+      funcSituacao.value = f.situacao;
+      funcDataMod.value = new Date(f.dataMod).toLocaleString();
+    }
+
+    document.getElementById('formTicket').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const funcionarioId = ticketFuncionario.value;
+      const qtd = parseInt(ticketQtd.value);
+      const id = ticketId.value || crypto.randomUUID();
+      const dataMod = new Date().toISOString();
+
+      const funcionario = funcionarios.find(f => f.id === funcionarioId);
+      if (!funcionario || funcionario.situacao !== 'A') return alert('Funcionário inválido ou inativo');
+
+      const existente = tickets.find(t => t.id === id);
+      if (existente) {
+        Object.assign(existente, { funcionarioId, qtd, dataMod });
+      } else {
+        tickets.push({ id, funcionarioId, qtd, situacao: 'A', dataMod });
+      }
+
+      salvarLocal();
+      limparTicketForm();
+    });
+
+    function salvarLocal() {
+      localStorage.setItem('funcionarios', JSON.stringify(funcionarios));
+      localStorage.setItem('tickets', JSON.stringify(tickets));
+    }
+
+    function gerarRelatorio() {
+      const tabela = document.getElementById('relTabela');
+      tabela.innerHTML = '';
+      const fId = relFuncionario.value;
+      const sit = relSituacao.value;
+      const inicio = relInicio.value ? new Date(relInicio.value) : null;
+      const fim = relFim.value ? new Date(relFim.value + 'T23:59:59') : null;
+
+      tickets.forEach(t => {
+        const f = funcionarios.find(f => f.id === t.funcionarioId);
+        if (!f) return;
+        if (fId && f.id !== fId) return;
+        if (sit && f.situacao !== sit) return;
+
+        const data = new Date(t.dataMod);
+        if ((inicio && data < inicio) || (fim && data > fim)) return;
+
+        tabela.innerHTML += `<tr><td>${f.nome}</td><td>${t.qtd}</td><td>${data.toLocaleString()}</td></tr>`;
+      });
+    }
+
+    function exportarCSV() {
+      let csv = 'Funcionário,Quantidade,Data\n';
+      tickets.forEach(t => {
+        const f = funcionarios.find(f => f.id === t.funcionarioId);
+        if (f) {
+          const data = new Date(t.dataMod).toLocaleString();
+          csv += `${f.nome},${t.qtd},${data}\n`;
+        }
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'relatorio_tickets.csv';
+      link.click();
+    }
+
+    function limparFuncionarioForm() {
+      funcId.value = '';
+      funcNome.value = '';
+      funcCPF.value = '';
+      funcSituacao.value = 'A';
+      funcDataMod.value = '';
+    }
+
+    function limparTicketForm() {
+      ticketId.value = '';
+      ticketFuncionario.value = '';
+      ticketQtd.value = '';
+      ticketDataMod.value = '';
+    }
+
+    function atualizarSelects() {
+      const selFunc = document.getElementById('ticketFuncionario');
+      const selRel = document.getElementById('relFuncionario');
+
+      selFunc.innerHTML = '';
+      selRel.innerHTML = '<option value="">Todos</option>';
+
+      funcionarios.forEach(f => {
+        const opt = new Option(f.nome + (f.situacao === 'I' ? ' (Inativo)' : ''), f.id);
+        if (f.situacao === 'A') selFunc.appendChild(opt.cloneNode(true));
+        selRel.appendChild(opt);
+      });
+    }
+
+    function atualizarTabelaFuncionarios() {
+      const tbody = document.getElementById('tabelaFuncionarios');
+      tbody.innerHTML = '';
+      funcionarios.forEach(f => {
+        tbody.innerHTML += `<tr><td>${f.nome}</td><td>${f.cpf}</td><td>${f.situacao}</td><td><button class='btn btn-sm btn-warning' onclick='editarFuncionario("${f.id}")'>Editar</button></td></tr>`;
+      });
+    }
+
+    atualizarSelects();
+    atualizarTabelaFuncionarios();
+  </script>
+  <style>body {
+    overflow-y: scroll;
+  }
+  </style>
+</body>
+</html>
